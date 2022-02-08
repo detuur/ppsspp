@@ -29,6 +29,7 @@
 #include "Core/Debugger/MemBlockInfo.h"
 #include "Core/HW/MediaEngine.h"
 #include "Core/HW/BufferQueue.h"
+#include "Core/Core.h"
 
 #include "Core/HLE/sceKernel.h"
 #include "Core/HLE/sceUtility.h"
@@ -1167,6 +1168,11 @@ static u32 sceAtracAddStreamData(int atracID, u32 bytesToAdd) {
 
 	atrac->first_.offset += bytesToAdd;
 	atrac->bufferValidBytes_ += bytesToAdd;
+
+	if (PSP_CoreParameter().compat.flags().AtracSeekToSampleHack && atrac->bufferState_ == ATRAC_STATUS_STREAMED_LOOP_FROM_END && atrac->RemainingFrames() > 2) { // Code Lyoko don't like SeekToSample for unknown reason		
+		atrac->loopNum_++;
+		atrac->SeekToSample(atrac->loopStartSample_ - atrac->FirstOffsetExtra() - atrac->firstSampleOffset_ + atrac->loopNum_);
+	}
 
 	return hleLogSuccessI(ME, 0);
 }

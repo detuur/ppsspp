@@ -91,6 +91,7 @@ void Compatibility::CheckSettings(IniFile &iniFile, const std::string &gameID) {
 	CheckSetting(iniFile, gameID, "DisableFirstFrameReadback", &flags_.DisableFirstFrameReadback);
 	CheckSetting(iniFile, gameID, "DisableRangeCulling", &flags_.DisableRangeCulling);
 	CheckSetting(iniFile, gameID, "MpegAvcWarmUp", &flags_.MpegAvcWarmUp);
+	CheckSetting(iniFile, gameID, "AtracSeekToSampleHack", &flags_.AtracSeekToSampleHack);
 }
 
 void Compatibility::CheckSetting(IniFile &iniFile, const std::string &gameID, const char *option, bool *flag) {

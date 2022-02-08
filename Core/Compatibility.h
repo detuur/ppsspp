@@ -89,6 +89,7 @@ struct CompatFlags {
 	bool DisableFirstFrameReadback;
 	bool DisableRangeCulling;
 	bool MpegAvcWarmUp;
+	bool AtracSeekToSampleHack;
 };
 
 class IniFile;
