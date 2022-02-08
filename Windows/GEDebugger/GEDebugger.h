@@ -84,6 +84,7 @@ private:
 	void DescribePixel(u32 pix, GPUDebugBufferFormat fmt, int x, int y, char desc[256]);
 	void DescribePixelRGBA(u32 pix, GPUDebugBufferFormat fmt, int x, int y, char desc[256]);
 	void ShowReplacementFilename();
+	void UpdateMenus();
 
 	u32 TexturePreviewFlags(const GPUgstate &state);
 
@@ -103,6 +104,7 @@ private:
 	int textureLevel_ = 0;
 	bool showClut_ = false;
 	bool forceOpaque_ = false;
+	bool autoFlush_ = false;
 	// The most recent primary/framebuffer and texture buffers.
 	const GPUDebugBuffer *primaryBuffer_ = nullptr;
 	const GPUDebugBuffer *secondBuffer_ = nullptr;

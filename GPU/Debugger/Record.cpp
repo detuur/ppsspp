@@ -24,7 +24,7 @@
 #include <mutex>
 #include <zstd.h>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/File/FileUtil.h"
 #include "Common/Thread/ParallelLoop.h"
 #include "Common/Log.h"
@@ -590,7 +590,7 @@ void NotifyDisplay(u32 framebuf, int stride, int fmt) {
 
 void NotifyFrame() {
 	const bool noDisplayAction = flipLastAction + 4 < gpuStats.numFlips;
-	// We do this only to catch things that don't call NotifyDisplay.
+	// We do this only to catch things that don't call NotifyFrame.
 	if (active && HasDrawCommands() && noDisplayAction) {
 		NOTICE_LOG(SYSTEM, "Recording complete on frame");
 

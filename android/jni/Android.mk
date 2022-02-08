@@ -30,6 +30,7 @@ ARCH_FILES := \
   $(SRC)/Core/MIPS/x86/RegCache.cpp \
   $(SRC)/Core/MIPS/x86/RegCacheFPU.cpp \
   $(SRC)/GPU/Common/VertexDecoderX86.cpp \
+  $(SRC)/GPU/Software/DrawPixelX86.cpp \
   $(SRC)/GPU/Software/SamplerX86.cpp
 endif
 
@@ -52,6 +53,7 @@ ARCH_FILES := \
   $(SRC)/Core/MIPS/x86/RegCache.cpp \
   $(SRC)/Core/MIPS/x86/RegCacheFPU.cpp \
   $(SRC)/GPU/Common/VertexDecoderX86.cpp \
+  $(SRC)/GPU/Software/DrawPixelX86.cpp \
   $(SRC)/GPU/Software/SamplerX86.cpp
 endif
 
@@ -129,6 +131,7 @@ VULKAN_FILES := \
   $(SRC)/Common/GPU/Vulkan/VulkanDebug.cpp \
   $(SRC)/Common/GPU/Vulkan/VulkanImage.cpp \
   $(SRC)/Common/GPU/Vulkan/VulkanMemory.cpp \
+  $(SRC)/Common/GPU/Vulkan/VulkanProfiler.cpp \
   $(SRC)/GPU/Vulkan/DrawEngineVulkan.cpp \
   $(SRC)/GPU/Vulkan/FramebufferManagerVulkan.cpp \
   $(SRC)/GPU/Vulkan/GPU_Vulkan.cpp \
@@ -142,6 +145,9 @@ VULKAN_FILES := \
   $(SRC)/GPU/Vulkan/VulkanUtil.cpp \
   $(SRC)/GPU/Vulkan/DebugVisVulkan.cpp
 #endif
+
+VMA_FILES := \
+  $(SRC)/ext/vma/vk_mem_alloc.cpp
 
 SPIRV_CROSS_FILES := \
   $(SRC)/ext/SPIRV-Cross/spirv_cfg.cpp \
@@ -198,6 +204,7 @@ EXEC_AND_LIB_FILES := \
   $(ARCH_FILES) \
   $(EGL_FILES) \
   $(VULKAN_FILES) \
+  $(VMA_FILES) \
   $(SPIRV_CROSS_FILES) \
   $(EXT_FILES) \
   $(NATIVE_FILES) \
@@ -357,10 +364,14 @@ EXEC_AND_LIB_FILES := \
   $(SRC)/GPU/GLES/ShaderManagerGLES.cpp.arm \
   $(SRC)/GPU/GLES/FragmentTestCacheGLES.cpp.arm \
   $(SRC)/GPU/GLES/TextureScalerGLES.cpp \
+  $(SRC)/GPU/Software/BinManager.cpp \
   $(SRC)/GPU/Software/Clipper.cpp \
+  $(SRC)/GPU/Software/DrawPixel.cpp.arm \
+  $(SRC)/GPU/Software/FuncId.cpp \
   $(SRC)/GPU/Software/Lighting.cpp \
   $(SRC)/GPU/Software/Rasterizer.cpp.arm \
   $(SRC)/GPU/Software/RasterizerRectangle.cpp.arm \
+  $(SRC)/GPU/Software/RasterizerRegCache.cpp \
   $(SRC)/GPU/Software/Sampler.cpp \
   $(SRC)/GPU/Software/SoftGpu.cpp \
   $(SRC)/GPU/Software/TransformUnit.cpp \
@@ -372,6 +383,7 @@ EXEC_AND_LIB_FILES := \
   $(SRC)/Core/HW/AsyncIOManager.cpp \
   $(SRC)/Core/HW/BufferQueue.cpp \
   $(SRC)/Core/HW/Camera.cpp \
+  $(SRC)/Core/HW/Display.cpp \
   $(SRC)/Core/HW/MemoryStick.cpp \
   $(SRC)/Core/HW/MpegDemux.cpp.arm \
   $(SRC)/Core/HW/MediaEngine.cpp.arm \
@@ -727,8 +739,9 @@ ifeq ($(UNITTEST),1)
   LOCAL_SRC_FILES := \
     $(SRC)/unittest/JitHarness.cpp \
     $(SRC)/unittest/TestShaderGenerators.cpp \
-    $(SRC)/unittest/TestVertexJit.cpp \
+    $(SRC)/unittest/TestSoftwareGPUJit.cpp \
     $(SRC)/unittest/TestThreadManager.cpp \
+    $(SRC)/unittest/TestVertexJit.cpp \
     $(TESTARMEMITTER_FILE) \
     $(SRC)/unittest/UnitTest.cpp
 

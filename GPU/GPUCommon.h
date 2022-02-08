@@ -31,7 +31,6 @@ enum DrawType {
 };
 
 enum {
-	FLAG_FLUSHBEFORE = 1,
 	FLAG_FLUSHBEFOREONCHANGE = 2,
 	FLAG_EXECUTE = 4,
 	FLAG_EXECUTEONCHANGE = 8,
@@ -171,6 +170,7 @@ public:
 
 	// Note: Not virtual!
 	void Flush();
+	void DispatchFlush() override;
 
 #ifdef USE_CRT_DBG
 #undef new
@@ -319,6 +319,7 @@ protected:
 	TextureCacheCommon *textureCache_ = nullptr;
 	DrawEngineCommon *drawEngineCommon_ = nullptr;
 	ShaderManagerCommon *shaderManager_ = nullptr;
+	bool flushOnParams_ = true;
 
 	GraphicsContext *gfxCtx_;
 	Draw::DrawContext *draw_;
@@ -384,6 +385,3 @@ struct CommonCommandTableEntry {
 	uint64_t dirty;
 	GPUCommon::CmdFunc func;
 };
-
-extern const CommonCommandTableEntry commonCommandTable[];
-extern size_t commonCommandTableSize;

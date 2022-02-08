@@ -312,22 +312,8 @@ void GameSettingsScreen::CreateViews() {
 	});
 	blockTransfer->SetDisabledPtr(&g_Config.bSoftwareRendering);
 
-	bool showSoftGPU = true;
-#ifdef MOBILE_DEVICE
-	// On Android, only show the software rendering setting if it's already enabled.
-	// Can still be turned on through INI file editing.
-	showSoftGPU = g_Config.bSoftwareRendering;
-#endif
-	if (showSoftGPU) {
-		CheckBox *softwareGPU = graphicsSettings->Add(new CheckBox(&g_Config.bSoftwareRendering, gr->T("Software Rendering", "Software Rendering (slow)")));
-		softwareGPU->OnClick.Add([=](EventParams &e) {
-			if (g_Config.bSoftwareRendering)
-				settingInfo_->Show(gr->T("SoftGPU Tip", "Currently VERY slow"), e.v);
-			return UI::EVENT_CONTINUE;
-		});
-		softwareGPU->OnClick.Handle(this, &GameSettingsScreen::OnSoftwareRendering);
-		softwareGPU->SetEnabled(!PSP_IsInited());
-	}
+	CheckBox *softwareGPU = graphicsSettings->Add(new CheckBox(&g_Config.bSoftwareRendering, gr->T("Software Rendering", "Software Rendering (slow)")));
+	softwareGPU->SetEnabled(!PSP_IsInited());
 
 	graphicsSettings->Add(new ItemHeader(gr->T("Frame Rate Control")));
 	static const char *frameSkip[] = { "Off", "1", "2", "3", "4", "5", "6", "7", "8" };
@@ -351,7 +337,7 @@ void GameSettingsScreen::CreateViews() {
 	graphicsSettings->Add(new ItemHeader(gr->T("Postprocessing effect")));
 
 	std::set<std::string> alreadyAddedShader;
-	for (int i = 0; i < g_Config.vPostShaderNames.size() + 1 && i < ARRAY_SIZE(shaderNames_); ++i) {
+	for (int i = 0; i < (int)g_Config.vPostShaderNames.size() + 1 && i < ARRAY_SIZE(shaderNames_); ++i) {
 		// Vector element pointer get invalidated on resize, cache name to have always a valid reference in the rendering thread
 		shaderNames_[i] = i == g_Config.vPostShaderNames.size() ? "Off" : g_Config.vPostShaderNames[i];
 		postProcChoice_ = graphicsSettings->Add(new ChoiceWithValueDisplay(&shaderNames_[i], StringFromFormat("%s #%d", gr->T("Postprocessing Shader"), i + 1), &PostShaderTranslateName));
@@ -479,7 +465,6 @@ void GameSettingsScreen::CreateViews() {
 	}
 
 	CheckBox *hwTransform = graphicsSettings->Add(new CheckBox(&g_Config.bHardwareTransform, gr->T("Hardware Transform")));
-	hwTransform->OnClick.Handle(this, &GameSettingsScreen::OnHardwareTransform);
 	hwTransform->SetDisabledPtr(&g_Config.bSoftwareRendering);
 
 	CheckBox *swSkin = graphicsSettings->Add(new CheckBox(&g_Config.bSoftwareSkinning, gr->T("Software Skinning")));
@@ -536,8 +521,10 @@ void GameSettingsScreen::CreateViews() {
 		settingInfo_->Show(gr->T("HardwareTessellation Tip", "Uses hardware to make curves"), e.v);
 		return UI::EVENT_CONTINUE;
 	});
-	tessHWEnable_ = DoesBackendSupportHWTess() && !g_Config.bSoftwareRendering && g_Config.bHardwareTransform;
-	tessellationHW->SetEnabledPtr(&tessHWEnable_);
+
+	tessellationHW->SetEnabledFunc([]() {
+		return DoesBackendSupportHWTess() && !g_Config.bSoftwareRendering && g_Config.bHardwareTransform;
+	});
 	}
 
 	// In case we're going to add few other antialiasing option like MSAA in the future.
@@ -1146,16 +1133,6 @@ UI::EventReturn GameSettingsScreen::OnAutoFrameskip(UI::EventParams &e) {
 	return UI::EVENT_DONE;
 }
 
-UI::EventReturn GameSettingsScreen::OnSoftwareRendering(UI::EventParams &e) {
-	tessHWEnable_ = DoesBackendSupportHWTess() && !g_Config.bSoftwareRendering && g_Config.bHardwareTransform;
-	return UI::EVENT_DONE;
-}
-
-UI::EventReturn GameSettingsScreen::OnHardwareTransform(UI::EventParams &e) {
-	tessHWEnable_ = DoesBackendSupportHWTess() && !g_Config.bSoftwareRendering && g_Config.bHardwareTransform;
-	return UI::EVENT_DONE;
-}
-
 UI::EventReturn GameSettingsScreen::OnScreenRotation(UI::EventParams &e) {
 	INFO_LOG(SYSTEM, "New display rotation: %d", g_Config.iScreenRotation);
 	INFO_LOG(SYSTEM, "Sending rotate");
@@ -1751,7 +1728,7 @@ UI::EventReturn GameSettingsScreen::OnSysInfo(UI::EventParams &e) {
 UI::EventReturn GameSettingsScreen::OnChangeSearchFilter(UI::EventParams &e) {
 #if PPSSPP_PLATFORM(WINDOWS) || defined(USING_QT_UI) || defined(__ANDROID__)
 	auto se = GetI18NCategory("Search");
-	System_InputBoxGetString(se->T("Search term"), searchFilter_, [this](bool result, const std::string &value) {
+	System_InputBoxGetString(se->T("Search term"), searchFilter_, [](bool result, const std::string &value) {
 		if (result) {
 			NativeMessageReceived("gameSettings_search", StripSpaces(value).c_str());
 		}
@@ -1822,6 +1799,9 @@ void DeveloperToolsScreen::CreateViews() {
 
 	list->Add(new CheckBox(&g_Config.bShowOnScreenMessages, dev->T("Show on-screen messages")));
 	list->Add(new CheckBox(&g_Config.bEnableLogging, dev->T("Enable Logging")))->OnClick.Handle(this, &DeveloperToolsScreen::OnLoggingChanged);
+	if (GetGPUBackend() == GPUBackend::VULKAN) {
+		list->Add(new CheckBox(&g_Config.bGpuLogProfiler, gr->T("GPU log profiler")));
+	}
 	list->Add(new CheckBox(&g_Config.bLogFrameDrops, dev->T("Log Dropped Frame Statistics")));
 	list->Add(new Choice(dev->T("Logging Channels")))->OnClick.Handle(this, &DeveloperToolsScreen::OnLogConfig);
 	list->Add(new ItemHeader(dev->T("Language")));

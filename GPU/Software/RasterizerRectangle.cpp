@@ -3,20 +3,24 @@
 #include <algorithm>
 #include <cmath>
 
+#include "Common/Common.h"
 #include "Common/Data/Convert/ColorConv.h"
 #include "Common/Profiler/Profiler.h"
-#include "Common/Thread/ParallelLoop.h"
+#include "Common/StringUtils.h"
 
 #include "Core/Config.h"
+#include "Core/Debugger/MemBlockInfo.h"
 #include "Core/MemMap.h"
 #include "Core/Reporting.h"
 #include "Core/System.h"
 #include "GPU/GPUState.h"
 
 #include "GPU/Common/TextureCacheCommon.h"
-#include "GPU/Software/SoftGpu.h"
+#include "GPU/Software/BinManager.h"
+#include "GPU/Software/DrawPixel.h"
 #include "GPU/Software/Rasterizer.h"
 #include "GPU/Software/Sampler.h"
+#include "GPU/Software/SoftGpu.h"
 
 #if defined(_M_SSE)
 #include <emmintrin.h>
@@ -29,14 +33,14 @@ extern bool currentDialogActive;
 namespace Rasterizer {
 
 // Through mode, with the specific Darkstalker settings.
-inline void DrawSinglePixel5551(u16 *pixel, const u32 color_in) {
+inline void DrawSinglePixel5551(u16 *pixel, const u32 color_in, const PixelFuncID &pixelID) {
 	u32 new_color;
 	if ((color_in >> 24) == 255) {
 		new_color = color_in & 0xFFFFFF;
 	} else {
 		const u32 old_color = RGBA5551ToRGBA8888(*pixel);
 		const Vec4<int> dst = Vec4<int>::FromRGBA(old_color);
-		Vec3<int> blended = AlphaBlendingResult(Vec4<int>::FromRGBA(color_in), dst);
+		Vec3<int> blended = AlphaBlendingResult(pixelID, Vec4<int>::FromRGBA(color_in), dst);
 		// ToRGB() always automatically clamps.
 		new_color = blended.ToRGB();
 	}
@@ -44,63 +48,59 @@ inline void DrawSinglePixel5551(u16 *pixel, const u32 color_in) {
 	*pixel = RGBA8888ToRGBA5551(new_color);
 }
 
-static inline Vec4<int> ModulateRGBA(const Vec4<int>& prim_color, const Vec4<int>& texcolor) {
-	Vec3<int> out_rgb;
-	int out_a;
+static inline Vec4IntResult SOFTRAST_CALL ModulateRGBA(Vec4IntArg prim_in, Vec4IntArg texcolor_in, const SamplerID &samplerID) {
+	Vec4<int> out;
+	Vec4<int> prim_color = prim_in;
+	Vec4<int> texcolor = texcolor_in;
 
 #if defined(_M_SSE)
-	// We can be accurate up to 24 bit integers, should be enough.
-	const __m128 p = _mm_cvtepi32_ps(prim_color.ivec);
-	const __m128 t = _mm_cvtepi32_ps(texcolor.ivec);
-	const __m128 b = _mm_mul_ps(p, t);
-	if (gstate.isColorDoublingEnabled()) {
-		// We double right here, only for modulate.  Other tex funcs do not color double.
-		const __m128 doubleColor = _mm_setr_ps(2.0f / 255.0f, 2.0f / 255.0f, 2.0f / 255.0f, 1.0f / 255.0f);
-		out_rgb.ivec = _mm_cvtps_epi32(_mm_mul_ps(b, doubleColor));
-	} else {
-		out_rgb.ivec = _mm_cvtps_epi32(_mm_mul_ps(b, _mm_set_ps1(1.0f / 255.0f)));
+	// Modulate weights slightly on the tex color, by adding one to prim and dividing by 256.
+	const __m128i p = _mm_slli_epi16(_mm_packs_epi32(prim_color.ivec, prim_color.ivec), 4);
+	const __m128i pboost = _mm_add_epi16(p, _mm_set1_epi16(1 << 4));
+	__m128i t = _mm_slli_epi16(_mm_packs_epi32(texcolor.ivec, texcolor.ivec), 4);
+	if (samplerID.useColorDoubling) {
+		const __m128i amask = _mm_set_epi16(-1, 0, 0, 0, -1, 0, 0, 0);
+		const __m128i a = _mm_and_si128(t, amask);
+		const __m128i rgb = _mm_andnot_si128(amask, t);
+		t = _mm_or_si128(_mm_slli_epi16(rgb, 1), a);
 	}
-	return Vec4<int>(out_rgb.ivec);
+	const __m128i b = _mm_mulhi_epi16(pboost, t);
+	out.ivec = _mm_unpacklo_epi16(b, _mm_setzero_si128());
 #else
-	if (gstate.isColorDoublingEnabled()) {
-		out_rgb = (prim_color.rgb() * texcolor.rgb() * 2) / 255;
+	if (samplerID.useColorDoubling) {
+		Vec4<int> tex = texcolor * Vec4<int>(2, 2, 2, 1);
+		out = ((prim_color + Vec4<int>::AssignToAll(1)) * tex) / 256;
 	} else {
-		out_rgb = prim_color.rgb() * texcolor.rgb() / 255;
+		out = (prim_color + Vec4<int>::AssignToAll(1)) * texcolor / 256;
 	}
-	out_a = (prim_color.a() * texcolor.a() / 255);
 #endif
 
-	return Vec4<int>(out_rgb.r(), out_rgb.g(), out_rgb.b(), out_a);
-
+	return ToVec4IntResult(out);
 }
 
-void DrawSprite(const VertexData& v0, const VertexData& v1) {
-	const u8 *texptr = nullptr;
+void DrawSprite(const VertexData &v0, const VertexData &v1, const BinCoords &range, const RasterizerState &state) {
+	const u8 *texptr = state.texptr[0];
 
-	GETextureFormat texfmt = gstate.getTextureFormat();
-	u32 texaddr = gstate.getTextureAddress(0);
-	int texbufw = GetTextureBufw(0, texaddr, texfmt);
-	if (Memory::IsValidAddress(texaddr))
-		texptr = Memory::GetPointerUnchecked(texaddr);
+	GETextureFormat texfmt = state.samplerID.TexFmt();
+	int texbufw = state.texbufw[0];
 
-	ScreenCoords pprime(v0.screenpos.x, v0.screenpos.y, 0);
-	Sampler::NearestFunc nearestFunc = Sampler::GetNearestFunc();  // Looks at gstate.
+	Sampler::FetchFunc fetchFunc = Sampler::GetFetchFunc(state.samplerID);
+	auto &pixelID = state.pixelID;
+	auto &samplerID = state.samplerID;
 
-	DrawingCoords pos0 = TransformUnit::ScreenToDrawing(v0.screenpos);
+	DrawingCoords pos0 = TransformUnit::ScreenToDrawing(v0.screenpos, state.screenOffsetX, state.screenOffsetY);
 	// Include the ending pixel based on its center, not start.
-	DrawingCoords pos1 = TransformUnit::ScreenToDrawing(v1.screenpos + ScreenCoords(7, 7, 0));
+	DrawingCoords pos1 = TransformUnit::ScreenToDrawing(v1.screenpos + ScreenCoords(7, 7, 0), state.screenOffsetX, state.screenOffsetY);
 
-	DrawingCoords scissorTL(gstate.getScissorX1(), gstate.getScissorY1(), 0);
-	DrawingCoords scissorBR(gstate.getScissorX2(), gstate.getScissorY2(), 0);
+	DrawingCoords scissorTL = TransformUnit::ScreenToDrawing(range.x1, range.y1, state.screenOffsetX, state.screenOffsetY);
+	DrawingCoords scissorBR = TransformUnit::ScreenToDrawing(range.x2, range.y2, state.screenOffsetX, state.screenOffsetY);
 
-	int z = pos0.z;
-	float fog = 1.0f;
+	int z = v1.screenpos.z;
+	int fog = 255;
 
 	bool isWhite = v1.color0 == Vec4<int>(255, 255, 255, 255);
 
-	constexpr int MIN_LINES_PER_THREAD = 32;
-
-	if (gstate.isTextureMapEnabled()) {
+	if (state.enableTextures) {
 		// 1:1 (but with mirror support) texture mapping!
 		int s_start = v0.texturecoords.x;
 		int t_start = v0.texturecoords.y;
@@ -127,117 +127,124 @@ void DrawSprite(const VertexData& v0, const VertexData& v1) {
 			pos0.y = scissorTL.y;
 		}
 
-		if (!gstate.isStencilTestEnabled() &&
-			!gstate.isDepthTestEnabled() &&
-			!gstate.isLogicOpEnabled() &&
-			!gstate.isColorTestEnabled() &&
-			!gstate.isDitherEnabled() &&
-			gstate.isAlphaTestEnabled() &&
-			gstate.getAlphaTestRef() == 0 &&
-			gstate.getAlphaTestMask() == 0xFF &&
-			gstate.isAlphaBlendEnabled() &&
-			gstate.isTextureAlphaUsed() &&
-			gstate.getTextureFunction() == GE_TEXFUNC_MODULATE &&
-			gstate.getColorMask() == 0x000000 &&
-			gstate.FrameBufFormat() == GE_FORMAT_5551) {
+		if (!pixelID.stencilTest &&
+			pixelID.DepthTestFunc() == GE_COMP_ALWAYS &&
+			!pixelID.applyLogicOp &&
+			!pixelID.colorTest &&
+			!pixelID.dithering &&
+			// TODO: Safe?
+			pixelID.AlphaTestFunc() != GE_COMP_ALWAYS &&
+			pixelID.alphaTestRef == 0 &&
+			!pixelID.hasAlphaTestMask &&
+			pixelID.alphaBlend &&
+			samplerID.useTextureAlpha &&
+			samplerID.TexFunc() == GE_TEXFUNC_MODULATE &&
+			!pixelID.applyColorWriteMask &&
+			pixelID.FBFormat() == GE_FORMAT_5551) {
 			if (isWhite) {
-				ParallelRangeLoop(&g_threadManager, [=](int y1, int y2) {
-					int t = t_start + (y1 - pos0.y) * dt;
-					for (int y = y1; y < y2; y++) {
-						int s = s_start;
-						u16 *pixel = fb.Get16Ptr(pos0.x, y, gstate.FrameBufStride());
-						for (int x = pos0.x; x < pos1.x; x++) {
-							u32 tex_color = nearestFunc(s, t, texptr, texbufw, 0);
-							if (tex_color & 0xFF000000) {
-								DrawSinglePixel5551(pixel, tex_color);
-							}
-							s += ds;
-							pixel++;
-						}
-						t += dt;
-					}
-				}, pos0.y, pos1.y, MIN_LINES_PER_THREAD);
-			} else {
-				ParallelRangeLoop(&g_threadManager, [=](int y1, int y2) {
-					int t = t_start + (y1 - pos0.y) * dt;
-					for (int y = y1; y < y2; y++) {
-						int s = s_start;
-						u16 *pixel = fb.Get16Ptr(pos0.x, y, gstate.FrameBufStride());
-						for (int x = pos0.x; x < pos1.x; x++) {
-							Vec4<int> prim_color = v1.color0;
-							Vec4<int> tex_color = Vec4<int>::FromRGBA(nearestFunc(s, t, texptr, texbufw, 0));
-							prim_color = ModulateRGBA(prim_color, tex_color);
-							if (prim_color.a() > 0) {
-								DrawSinglePixel5551(pixel, prim_color.ToRGBA());
-							}
-							s += ds;
-							pixel++;
-						}
-						t += dt;
-					}
-				}, pos0.y, pos1.y, MIN_LINES_PER_THREAD);
-			}
-		} else {
-			ParallelRangeLoop(&g_threadManager, [=](int y1, int y2) {
-				int t = t_start + (y1 - pos0.y) * dt;
-				for (int y = y1; y < y2; y++) {
+				int t = t_start;
+				for (int y = pos0.y; y < pos1.y; y++) {
 					int s = s_start;
-					// Not really that fast but faster than triangle.
+					u16 *pixel = fb.Get16Ptr(pos0.x, y, pixelID.cached.framebufStride);
 					for (int x = pos0.x; x < pos1.x; x++) {
-						Vec4<int> prim_color = v1.color0;
-						Vec4<int> tex_color = Vec4<int>::FromRGBA(nearestFunc(s, t, texptr, texbufw, 0));
-						prim_color = GetTextureFunctionOutput(prim_color, tex_color);
-						DrawingCoords pos(x, y, z);
-						DrawSinglePixelNonClear(pos, (u16)z, 1.0f, prim_color);
+						u32 tex_color = Vec4<int>(fetchFunc(s, t, texptr, texbufw, 0, state.samplerID)).ToRGBA();
+						if (tex_color & 0xFF000000) {
+							DrawSinglePixel5551(pixel, tex_color, pixelID);
+						}
 						s += ds;
+						pixel++;
 					}
 					t += dt;
 				}
-			}, pos0.y, pos1.y, MIN_LINES_PER_THREAD);
+			} else {
+				int t = t_start;
+				for (int y = pos0.y; y < pos1.y; y++) {
+					int s = s_start;
+					u16 *pixel = fb.Get16Ptr(pos0.x, y, pixelID.cached.framebufStride);
+					for (int x = pos0.x; x < pos1.x; x++) {
+						Vec4<int> prim_color = v1.color0;
+						Vec4<int> tex_color = fetchFunc(s, t, texptr, texbufw, 0, state.samplerID);
+						prim_color = Vec4<int>(ModulateRGBA(ToVec4IntArg(prim_color), ToVec4IntArg(tex_color), state.samplerID));
+						if (prim_color.a() > 0) {
+							DrawSinglePixel5551(pixel, prim_color.ToRGBA(), pixelID);
+						}
+						s += ds;
+						pixel++;
+					}
+					t += dt;
+				}
+			}
+		} else {
+			int xoff = ((v0.screenpos.x & 15) + 1) / 2;
+			int yoff = ((v0.screenpos.y & 15) + 1) / 2;
+
+			float dsf = ds * (1.0f / (float)(1 << state.samplerID.width0Shift));
+			float dtf = dt * (1.0f / (float)(1 << state.samplerID.height0Shift));
+			float sf_start = s_start * (1.0f / (float)(1 << state.samplerID.width0Shift));
+			float tf_start = t_start * (1.0f / (float)(1 << state.samplerID.height0Shift));
+
+			float t = tf_start;
+			for (int y = pos0.y; y < pos1.y; y++) {
+				float s = sf_start;
+				// Not really that fast but faster than triangle.
+				for (int x = pos0.x; x < pos1.x; x++) {
+					Vec4<int> prim_color = state.nearest(s, t, xoff, yoff, ToVec4IntArg(v1.color0), &texptr, &texbufw, 0, 0, state.samplerID);
+					state.drawPixel(x, y, z, 255, ToVec4IntArg(prim_color), pixelID);
+					s += dsf;
+				}
+				t += dtf;
+			}
 		}
 	} else {
 		if (pos1.x > scissorBR.x) pos1.x = scissorBR.x + 1;
 		if (pos1.y > scissorBR.y) pos1.y = scissorBR.y + 1;
 		if (pos0.x < scissorTL.x) pos0.x = scissorTL.x;
 		if (pos0.y < scissorTL.y) pos0.y = scissorTL.y;
-		if (!gstate.isStencilTestEnabled() &&
-			!gstate.isDepthTestEnabled() &&
-			!gstate.isLogicOpEnabled() &&
-			!gstate.isColorTestEnabled() &&
-			!gstate.isDitherEnabled() &&
-			gstate.isAlphaTestEnabled() &&
-			gstate.getAlphaTestRef() == 0 &&
-			gstate.getAlphaTestMask() == 0xFF &&
-			gstate.isAlphaBlendEnabled() &&
-			gstate.isTextureAlphaUsed() &&
-			gstate.getTextureFunction() == GE_TEXFUNC_MODULATE &&
-			gstate.getColorMask() == 0x000000 &&
-			gstate.FrameBufFormat() == GE_FORMAT_5551) {
+		if (!pixelID.stencilTest &&
+			pixelID.DepthTestFunc() == GE_COMP_ALWAYS &&
+			!pixelID.applyLogicOp &&
+			!pixelID.colorTest &&
+			!pixelID.dithering &&
+			// TODO: Safe?
+			pixelID.AlphaTestFunc() != GE_COMP_ALWAYS &&
+			pixelID.alphaTestRef == 0 &&
+			!pixelID.hasAlphaTestMask &&
+			pixelID.alphaBlend &&
+			samplerID.useTextureAlpha &&
+			samplerID.TexFunc() == GE_TEXFUNC_MODULATE &&
+			!pixelID.applyColorWriteMask &&
+			pixelID.FBFormat() == GE_FORMAT_5551) {
 			if (v1.color0.a() == 0)
 				return;
 
-			ParallelRangeLoop(&g_threadManager, [=](int y1, int y2) {
-				for (int y = y1; y < y2; y++) {
-					u16 *pixel = fb.Get16Ptr(pos0.x, y, gstate.FrameBufStride());
-					for (int x = pos0.x; x < pos1.x; x++) {
-						Vec4<int> prim_color = v1.color0;
-						DrawSinglePixel5551(pixel, prim_color.ToRGBA());
-						pixel++;
-					}
+			for (int y = pos0.y; y < pos1.y; y++) {
+				u16 *pixel = fb.Get16Ptr(pos0.x, y, pixelID.cached.framebufStride);
+				for (int x = pos0.x; x < pos1.x; x++) {
+					Vec4<int> prim_color = v1.color0;
+					DrawSinglePixel5551(pixel, prim_color.ToRGBA(), pixelID);
+					pixel++;
 				}
-			}, pos0.y, pos1.y, MIN_LINES_PER_THREAD);
+			}
 		} else {
-			ParallelRangeLoop(&g_threadManager, [=](int y1, int y2) {
-				for (int y = y1; y < y2; y++) {
-					for (int x = pos0.x; x < pos1.x; x++) {
-						Vec4<int> prim_color = v1.color0;
-						DrawingCoords pos(x, y, z);
-						DrawSinglePixelNonClear(pos, (u16)z, fog, prim_color);
-					}
+			for (int y = pos0.y; y < pos1.y; y++) {
+				for (int x = pos0.x; x < pos1.x; x++) {
+					Vec4<int> prim_color = v1.color0;
+					state.drawPixel(x, y, z, fog, ToVec4IntArg(prim_color), pixelID);
 				}
-			}, pos0.y, pos1.y, MIN_LINES_PER_THREAD);
+			}
 		}
 	}
+
+#if defined(SOFTGPU_MEMORY_TAGGING_BASIC) || defined(SOFTGPU_MEMORY_TAGGING_DETAILED)
+	uint32_t bpp = pixelID.FBFormat() == GE_FORMAT_8888 ? 4 : 2;
+	std::string tag = StringFromFormat("DisplayListR_%08x", state.listPC);
+	std::string ztag = StringFromFormat("DisplayListRZ_%08x", state.listPC);
+
+	for (int y = pos0.y; y < pos1.y; y++) {
+		uint32_t row = gstate.getFrameBufAddress() + y * pixelID.cached.framebufStride * bpp;
+		NotifyMemInfo(MemBlockFlags::WRITE, row + pos0.x * bpp, (pos1.x - pos0.x) * bpp, tag.c_str(), tag.size());
+	}
+#endif
 }
 
 bool g_needsClearAfterDialog = false;
@@ -249,7 +256,9 @@ static inline bool NoClampOrWrap(const Vec2f &tc) {
 }
 
 // Returns true if the normal path should be skipped.
-bool RectangleFastPath(const VertexData &v0, const VertexData &v1) {
+bool RectangleFastPath(const VertexData &v0, const VertexData &v1, BinManager &binner) {
+	const RasterizerState &state = binner.State();
+
 	g_DarkStalkerStretch = DSStretch::Off;
 	// Check for 1:1 texture mapping. In that case we can call DrawSprite.
 	int xdiff = v1.screenpos.x - v0.screenpos.x;
@@ -262,9 +271,9 @@ bool RectangleFastPath(const VertexData &v0, const VertexData &v1) {
 	// Currently only works for TL/BR, which is the most common but not required.
 	bool orient_check = xdiff >= 0 && ydiff >= 0;
 	// We already have a fast path for clear in ClearRectangle.
-	bool state_check = !gstate.isModeClear() && NoClampOrWrap(v0.texturecoords) && NoClampOrWrap(v1.texturecoords);
-	if ((coord_check || !gstate.isTextureMapEnabled()) && orient_check && state_check) {
-		Rasterizer::DrawSprite(v0, v1);
+	bool state_check = !state.pixelID.clearMode && !state.samplerID.hasAnyMips && NoClampOrWrap(v0.texturecoords) && NoClampOrWrap(v1.texturecoords);
+	if ((coord_check || !state.enableTextures) && orient_check && state_check) {
+		binner.AddSprite(v0, v1);
 		return true;
 	}
 
@@ -286,7 +295,7 @@ bool RectangleFastPath(const VertexData &v0, const VertexData &v1) {
 				gstate.textureMapEnable &= ~1;
 				VertexData newV1 = v1;
 				newV1.color0 = Vec4<int>(0, 0, 0, 255);
-				Rasterizer::DrawSprite(v0, newV1);
+				binner.AddSprite(v0, newV1);
 				gstate.textureMapEnable |= 1;
 			}
 			return true;

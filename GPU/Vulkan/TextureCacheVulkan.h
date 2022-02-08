@@ -17,8 +17,6 @@
 
 #pragma once
 
-#include <map>
-
 #include "Common/Data/Collections/Hashmaps.h"
 #include "GPU/GPUInterface.h"
 #include "GPU/GPUState.h"
@@ -36,7 +34,6 @@ class DrawEngineVulkan;
 class VulkanContext;
 class VulkanTexture;
 class VulkanPushBuffer;
-class VulkanDeviceAllocator;
 
 class SamplerCache {
 public:

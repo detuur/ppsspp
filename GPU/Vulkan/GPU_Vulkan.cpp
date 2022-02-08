@@ -59,6 +59,9 @@ GPU_Vulkan::GPU_Vulkan(GraphicsContext *gfxCtx, Draw::DrawContext *draw)
 	CheckGPUFeatures();
 
 	VulkanContext *vulkan = (VulkanContext *)gfxCtx->GetAPIContext();
+
+	vulkan->SetProfilerEnabledPtr(&g_Config.bGpuLogProfiler);
+
 	shaderManagerVulkan_ = new ShaderManagerVulkan(draw);
 	pipelineManager_ = new PipelineManagerVulkan(vulkan);
 	framebufferManagerVulkan_ = new FramebufferManagerVulkan(draw);
@@ -123,6 +126,11 @@ void GPU_Vulkan::CancelReady() {
 }
 
 void GPU_Vulkan::LoadCache(const Path &filename) {
+	if (!g_Config.bShaderCache) {
+		INFO_LOG(G3D, "Shader cache disabled. Not loading.");
+		return;
+	}
+
 	PSP_SetLoading("Loading shader cache...");
 	// Actually precompiled by IsReady() since we're single-threaded.
 	FILE *f = File::OpenCFile(filename, "rb");
@@ -148,6 +156,11 @@ void GPU_Vulkan::LoadCache(const Path &filename) {
 }
 
 void GPU_Vulkan::SaveCache(const Path &filename) {
+	if (!g_Config.bShaderCache) {
+		INFO_LOG(G3D, "Shader cache disabled. Not saving.");
+		return;
+	}
+
 	if (!draw_) {
 		// Already got the lost message, we're in shutdown.
 		WARN_LOG(G3D, "Not saving shaders - shutting down from in-game.");
@@ -490,8 +503,8 @@ void GPU_Vulkan::InitDeviceObjects() {
 	// Initialize framedata
 	for (int i = 0; i < VulkanContext::MAX_INFLIGHT_FRAMES; i++) {
 		_assert_(!frameData_[i].push_);
-		VkBufferUsageFlags usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-		frameData_[i].push_ = new VulkanPushBuffer(vulkan, 256 * 1024, usage);
+		VkBufferUsageFlags usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		frameData_[i].push_ = new VulkanPushBuffer(vulkan, "gpuPush", 256 * 1024, usage, PushBufferType::CPU_TO_GPU);
 	}
 
 	VulkanRenderManager *rm = (VulkanRenderManager *)draw_->GetNativeObject(Draw::NativeObject::RENDER_MANAGER);
@@ -511,9 +524,9 @@ void GPU_Vulkan::InitDeviceObjects() {
 
 void GPU_Vulkan::DestroyDeviceObjects() {
 	INFO_LOG(G3D, "GPU_Vulkan::DestroyDeviceObjects");
-	VulkanContext *vulkan = (VulkanContext *)draw_->GetNativeObject(Draw::NativeObject::CONTEXT);
 	for (int i = 0; i < VulkanContext::MAX_INFLIGHT_FRAMES; i++) {
 		if (frameData_[i].push_) {
+			VulkanContext *vulkan = (VulkanContext *)draw_->GetNativeObject(Draw::NativeObject::CONTEXT);
 			frameData_[i].push_->Destroy(vulkan);
 			delete frameData_[i].push_;
 			frameData_[i].push_ = nullptr;

@@ -311,7 +311,6 @@ bool TestParsers() {
 bool TestVFPUSinCos() {
 	float sine, cosine;
 	InitVFPUSinCos();
-	EXPECT_FALSE(vfpu_sincos == nullptr);
 	vfpu_sincos(0.0f, sine, cosine);
 	EXPECT_EQ_FLOAT(sine, 0.0f);
 	EXPECT_EQ_FLOAT(cosine, 1.0f);
@@ -602,12 +601,14 @@ static bool TestPath() {
 	EXPECT_EQ_STR(Path("foo.bar/hello.txt").WithReplacedExtension(".txt", ".html").ToString(), std::string("foo.bar/hello.html"));
 
 	EXPECT_EQ_STR(Path("C:\\Yo").NavigateUp().ToString(), std::string("C:"));
+#if PPSSPP_PLATFORM(WINDOWS)
 	EXPECT_EQ_STR(Path("C:").NavigateUp().ToString(), std::string("/"));
 
 	EXPECT_EQ_STR(Path("C:\\Yo").GetDirectory(), std::string("C:"));
 	EXPECT_EQ_STR(Path("C:\\Yo").GetFilename(), std::string("Yo"));
 	EXPECT_EQ_STR(Path("C:\\Yo\\Lo").GetDirectory(), std::string("C:/Yo"));
 	EXPECT_EQ_STR(Path("C:\\Yo\\Lo").GetFilename(), std::string("Lo"));
+#endif
 
 	std::string computedPath;
 
@@ -671,7 +672,7 @@ protected:
 	float MeasureWidth(const char *str, size_t bytes) override {
 		// Simple case for unit testing.
 		int w = 0;
-		for (UTF8 utf(str); !utf.end() && utf.byteIndex() < bytes; ) {
+		for (UTF8 utf(str); !utf.end() && (size_t)utf.byteIndex() < bytes; ) {
 			uint32_t c = utf.next();
 			switch (c) {
 			case ' ':
@@ -752,6 +753,7 @@ bool TestArmEmitter();
 bool TestArm64Emitter();
 bool TestX64Emitter();
 bool TestShaderGenerators();
+bool TestSoftwareGPUJit();
 bool TestThreadManager();
 
 TestItem availableTests[] = {
@@ -777,6 +779,7 @@ TestItem availableTests[] = {
 	TEST_ITEM(CLZ),
 	TEST_ITEM(MemMap),
 	TEST_ITEM(ShaderGenerators),
+	TEST_ITEM(SoftwareGPUJit),
 	TEST_ITEM(Path),
 	TEST_ITEM(AndroidContentURI),
 	TEST_ITEM(ThreadManager),

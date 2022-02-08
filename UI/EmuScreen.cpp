@@ -63,7 +63,6 @@ using namespace std::placeholders;
 #include "GPU/Vulkan/DebugVisVulkan.h"
 #endif
 #include "Core/HLE/sceCtrl.h"
-#include "Core/HLE/sceDisplay.h"
 #include "Core/HLE/sceSas.h"
 #include "Core/Debugger/SymbolMap.h"
 #include "Core/SaveState.h"
@@ -71,6 +70,7 @@ using namespace std::placeholders;
 #include "Core/HLE/__sceAudio.h"
 #include "Core/HLE/proAdhoc.h"
 #include "Core/HLE/Plugins.h"
+#include "Core/HW/Display.h"
 
 #include "UI/BackgroundAudio.h"
 #include "UI/OnScreenDisplay.h"
@@ -545,11 +545,17 @@ inline float clamp1(float x) {
 bool EmuScreen::touch(const TouchInput &touch) {
 	Core_NotifyActivity();
 
-	if (chatMenu_ && (touch.flags & TOUCH_DOWN) != 0 && !chatMenu_->Contains(touch.x, touch.y)) {
-		chatMenu_->Close();
-		if (chatButton_)
-			chatButton_->SetVisibility(UI::V_VISIBLE);
-		UI::EnableFocusMovement(false);
+	if (chatMenu_ && chatMenu_->GetVisibility() == UI::V_VISIBLE) {
+		// Avoid pressing touch button behind the chat
+		if (chatMenu_->Contains(touch.x, touch.y)) {
+			chatMenu_->Touch(touch);
+			return true;
+		} else if ((touch.flags & TOUCH_DOWN) != 0) {
+			chatMenu_->Close();
+			if (chatButton_)
+				chatButton_->SetVisibility(UI::V_VISIBLE);
+			UI::EnableFocusMovement(false);
+		}
 	}
 
 	if (root_) {
@@ -1407,9 +1413,11 @@ void EmuScreen::render() {
 		break;
 	}
 
+	PSP_EndHostFrame();
+
+	// This must happen after PSP_EndHostFrame so that things like push buffers are end-frame'd before we start destroying stuff.
 	checkPowerDown();
 
-	PSP_EndHostFrame();
 	if (invalid_)
 		return;
 

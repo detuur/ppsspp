@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
+#include <vector>
 #include "Common/CommonWindows.h"
 
 namespace W32Util
@@ -41,14 +43,17 @@ class GenericListControl
 {
 public:
 	GenericListControl(HWND hwnd, const GenericListViewDef& def);
-	virtual ~GenericListControl() { };
+	virtual ~GenericListControl();
 	void HandleNotify(LPARAM lParam);
 	void Update();
 	int GetSelectedIndex();
 	HWND GetHandle() { return handle; };
 	void SetSendInvalidRows(bool enabled) { sendInvalidRows = enabled; };
 protected:
+	void SetIconList(int w, int h, const std::vector<HICON> &icons);
 	void SetCheckState(int item, bool state);
+	void SetItemState(int item, uint8_t state);
+
 	virtual bool WindowMessage(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& returnValue) = 0;
 	virtual void GetColumnText(wchar_t* dest, int row, int col) = 0;
 	virtual int GetRowCount() = 0;
@@ -56,14 +61,17 @@ protected:
 	virtual void OnRightClick(int itemIndex, int column, const POINT& point) { };
 	virtual void CopyRows(int start, int size);
 	virtual void OnToggle(int item, bool newValue) { };
+
 private:
 	static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	void ProcessUpdate();
 	void ResizeColumns();
 	void ProcessCopy();
 	void SelectAll();
 
 	HWND handle;
 	WNDPROC oldProc;
+	void *images_ = nullptr;
 	const GenericListViewColumn* columns;
 	int columnCount;
 	wchar_t stringBuffer[256];
@@ -72,4 +80,5 @@ private:
 	// Used for hacky workaround to fix a rare hang (see issue #5184)
 	volatile bool inResizeColumns;
 	volatile bool updating;
+	bool updateScheduled_ = false;
 };

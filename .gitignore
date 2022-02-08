@@ -90,6 +90,8 @@ screenshots
 android/assets/lang
 android/assets/flash0
 ui_atlas_luna.zim.png
+font_atlas_luna.zim.png
+asciifont_atlas_luna.zim.png
 ppge_atlas_luna.zim.png
 local.properties
 r.sh

@@ -129,6 +129,8 @@ void CGEDebugger::Init() {
 CGEDebugger::CGEDebugger(HINSTANCE _hInstance, HWND _hParent)
 	: Dialog((LPCSTR)IDD_GEDEBUGGER, _hInstance, _hParent)
 	, stepCountDlg(_hInstance, m_hDlg) {
+	SetMenu(m_hDlg, LoadMenu(_hInstance, MAKEINTRESOURCE(IDR_GEDBG_MENU)));
+
 	// minimum size = a little more than the default
 	RECT windowRect;
 	GetWindowRect(m_hDlg, &windowRect);
@@ -185,8 +187,8 @@ CGEDebugger::CGEDebugger(HINSTANCE _hInstance, HWND _hParent)
 	// set window position
 	int x = g_Config.iGEWindowX == -1 ? windowRect.left : g_Config.iGEWindowX;
 	int y = g_Config.iGEWindowY == -1 ? windowRect.top : g_Config.iGEWindowY;
-	int w = g_Config.iGEWindowW == -1 ? minWidth_ : g_Config.iGEWindowW;
-	int h = g_Config.iGEWindowH == -1 ? minHeight_ : g_Config.iGEWindowH;
+	int w = g_Config.iGEWindowW == -1 ? minWidth_ : std::max(minWidth_, g_Config.iGEWindowW);
+	int h = g_Config.iGEWindowH == -1 ? minHeight_ : std::max(minHeight_, g_Config.iGEWindowH);
 	MoveWindow(m_hDlg,x,y,w,h,FALSE);
 
 	SetTimer(m_hDlg, 1, USER_TIMER_MINIMUM, nullptr);
@@ -334,10 +336,14 @@ void CGEDebugger::PreviewExport(const GPUDebugBuffer *dbgBuffer) {
 }
 
 void CGEDebugger::ShowReplacementFilename() {
-		const auto state = gpuDebug->GetGState();
-		u32 texAddr = state.getTextureAddress(textureLevel_);
-		std::string filename = gpuDebug->PrintReplacementInfo(texAddr);
-		InputBox_GetString(GetModuleHandle(NULL), m_hDlg, L"Filename", filename, filename);
+	auto memLock = Memory::Lock();
+	if (!PSP_IsInited()) {
+		return;
+	}
+	const auto state = gpuDebug->GetGState();
+	u32 texAddr = state.getTextureAddress(textureLevel_);
+	std::string filename = gpuDebug->PrintReplacementInfo(texAddr);
+	InputBox_GetString(GetModuleHandle(NULL), m_hDlg, L"Filename", filename, filename);
 }
 
 void CGEDebugger::UpdatePreviews() {
@@ -353,6 +359,8 @@ void CGEDebugger::UpdatePreviews() {
 	}
 
 	updating_ = true;
+	if (autoFlush_)
+		GPU_FlushDrawing();
 	UpdateTextureLevel(textureLevel_);
 	UpdatePrimaryPreview(state);
 	UpdateSecondPreview(state);
@@ -717,11 +725,10 @@ void CGEDebugger::UpdateSize(WORD width, WORD height) {
 	MoveWindow(tabControl,tabRect.left,tabRect.top,tabRect.right-tabRect.left,tabRect.bottom-tabRect.top,TRUE);
 }
 
-void CGEDebugger::SavePosition()
-{
+void CGEDebugger::SavePosition() {
 	RECT rc;
-	if (GetWindowRect(m_hDlg, &rc))
-	{
+	// Don't save while we're still loading.
+	if (tabs && GetWindowRect(m_hDlg, &rc)) {
 		g_Config.iGEWindowX = rc.left;
 		g_Config.iGEWindowY = rc.top;
 		g_Config.iGEWindowW = rc.right - rc.left;
@@ -794,6 +801,10 @@ BOOL CGEDebugger::DlgProc(UINT message, WPARAM wParam, LPARAM lParam) {
 			}
 			break;
 		}
+		break;
+
+	case WM_MENUSELECT:
+		UpdateMenus();
 		break;
 
 	case WM_COMMAND:
@@ -893,6 +904,18 @@ BOOL CGEDebugger::DlgProc(UINT message, WPARAM wParam, LPARAM lParam) {
 			GPURecord::Activate();
 			break;
 
+		case IDC_GEDBG_FLUSH:
+			if (GPUDebug::IsActive() && gpuDebug != nullptr) {
+				if (!autoFlush_)
+					GPU_FlushDrawing();
+				UpdatePreviews();
+			}
+			break;
+
+		case IDC_GEDBG_FLUSHAUTO:
+			autoFlush_ = !autoFlush_;
+			break;
+
 		case IDC_GEDBG_FORCEOPAQUE:
 			if (GPUDebug::IsActive() && gpuDebug != nullptr) {
 				forceOpaque_ = SendMessage(GetDlgItem(m_hDlg, IDC_GEDBG_FORCEOPAQUE), BM_GETCHECK, 0, 0) != 0;
@@ -906,6 +929,15 @@ BOOL CGEDebugger::DlgProc(UINT message, WPARAM wParam, LPARAM lParam) {
 				UpdatePreviews();
 			}
 			break;
+
+		case IDC_GEDBG_SETPRIMFILTER:
+		{
+			std::string value = GPUDebug::GetRestrictPrims();
+			if (InputBox_GetString(GetModuleHandle(NULL), m_hDlg, L"Prim counter ranges", value, value)) {
+				GPUDebug::SetRestrictPrims(value.c_str());
+			}
+			break;
+		}
 		}
 		break;
 
@@ -948,4 +980,8 @@ BOOL CGEDebugger::DlgProc(UINT message, WPARAM wParam, LPARAM lParam) {
 	}
 
 	return FALSE;
+}
+
+void CGEDebugger::UpdateMenus() {
+	CheckMenuItem(GetMenu(m_hDlg), IDC_GEDBG_FLUSHAUTO, MF_BYCOMMAND | (autoFlush_ ? MF_CHECKED : MF_UNCHECKED));
 }

@@ -158,6 +158,9 @@ namespace W32Util
 	}
 }
 
+static constexpr UINT_PTR IDT_UPDATE = 0xC0DE0042;
+static constexpr UINT UPDATE_DELAY = 1000 / 60;
+
 GenericListControl::GenericListControl(HWND hwnd, const GenericListViewDef& def)
 	: handle(hwnd), columns(def.columns),columnCount(def.columnCount),valid(false),
 	inResizeColumns(false),updating(false)
@@ -200,6 +203,19 @@ GenericListControl::GenericListControl(HWND hwnd, const GenericListViewDef& def)
 	valid = true;
 }
 
+GenericListControl::~GenericListControl() {
+	if (images_ != nullptr)
+		ImageList_Destroy((HIMAGELIST)images_);
+}
+
+void GenericListControl::SetIconList(int w, int h, const std::vector<HICON> &icons) {
+	images_ = ImageList_Create(w, h, ILC_COLOR32 | ILC_MASK, 0, (int)icons.size());
+	for (const HICON &icon : icons)
+		ImageList_AddIcon((HIMAGELIST)images_, icon);
+
+	ListView_SetImageList(handle, (HIMAGELIST)images_, LVSIL_STATE);
+}
+
 void GenericListControl::HandleNotify(LPARAM lParam)
 {
 	LPNMHDR mhdr = (LPNMHDR) lParam;
@@ -231,6 +247,7 @@ void GenericListControl::HandleNotify(LPARAM lParam)
 			wcscat(stringBuffer,L"Invalid");
 
 		dispInfo->item.pszText = stringBuffer;
+		dispInfo->item.mask |= LVIF_TEXT;
 		return;
 	}
 	 
@@ -251,12 +268,29 @@ void GenericListControl::HandleNotify(LPARAM lParam)
 	}
 }
 
-void GenericListControl::Update()
-{
+void GenericListControl::Update() {
+	if (!updateScheduled_) {
+		SetTimer(handle, IDT_UPDATE, UPDATE_DELAY, nullptr);
+		updateScheduled_ = true;
+	}
+}
+
+void GenericListControl::ProcessUpdate() {
 	updating = true;
 	int newRows = GetRowCount();
 
 	int items = ListView_GetItemCount(handle);
+	ListView_SetItemCount(handle, newRows);
+
+	// Scroll to top if we're removing items.  It kinda does this automatically, but it's buggy.
+	if (items > newRows) {
+		POINT pt{};
+		ListView_GetOrigin(handle, &pt);
+
+		if (pt.x != 0 || pt.y != 0)
+			ListView_Scroll(handle, -pt.x, -pt.y);
+	}
+
 	while (items < newRows)
 	{
 		LVITEM lvI;
@@ -279,8 +313,9 @@ void GenericListControl::Update()
 
 	ResizeColumns();
 
-	InvalidateRect(handle,NULL,true);
+	InvalidateRect(handle, nullptr, TRUE);
 	UpdateWindow(handle);
+	ListView_RedrawItems(handle, 0, newRows - 1);
 	updating = false;
 }
 
@@ -289,6 +324,13 @@ void GenericListControl::SetCheckState(int item, bool state)
 {
 	updating = true;
 	ListView_SetCheckState(handle,item,state ? TRUE : FALSE);
+	updating = false;
+}
+
+void GenericListControl::SetItemState(int item, uint8_t state) {
+	updating = true;
+	ListView_SetItemState(handle, item, (state & 0xF) << 12, LVIS_STATEIMAGEMASK);
+	ListView_RedrawItems(handle, item, item);
 	updating = false;
 }
 
@@ -336,6 +378,14 @@ LRESULT CALLBACK GenericListControl::wndProc(HWND hwnd, UINT msg, WPARAM wParam,
 			if (KeyDownAsync(VK_CONTROL))
 				list->SelectAll();
 			break;
+		}
+		break;
+
+	case WM_TIMER:
+		if (wParam == IDT_UPDATE) {
+			list->ProcessUpdate();
+			list->updateScheduled_ = false;
+			KillTimer(hwnd, wParam);
 		}
 		break;
 	}

@@ -211,6 +211,7 @@ public:
 	// Calling from a separate thread (e.g. UI) may fail.
 	virtual void SetCmdValue(u32 op) = 0;
 	virtual std::string PrintReplacementInfo(u32 texAddr) = 0;
+	virtual void DispatchFlush() = 0;
 
 	virtual bool GetCurrentSimpleVertices(int count, std::vector<GPUDebugVertex> &vertices, std::vector<u16> &indices) {
 		return false;

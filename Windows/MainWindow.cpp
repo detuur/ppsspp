@@ -28,7 +28,6 @@
 #include <Windowsx.h>
 #include <shellapi.h>
 #include <commctrl.h>
-#include <map>
 #include <string>
 
 #include "Common/System/Display.h"
@@ -133,6 +132,9 @@ namespace MainWindow
 	static bool inResizeMove = false;
 	static bool hasFocus = true;
 	static bool g_isFullscreen = false;
+
+	static bool disasmMapLoadPending = false;
+	static bool memoryMapLoadPending = false;
 
 	// gross hack
 	bool noFocusPause = false;	// TOGGLE_PAUSE state to override pause on lost focus
@@ -574,6 +576,9 @@ namespace MainWindow
 			disasmWindow = new CDisasm(MainWindow::GetHInstance(), MainWindow::GetHWND(), currentDebugMIPS);
 			DialogManager::AddDlg(disasmWindow);
 		}
+		if (disasmMapLoadPending)
+			disasmWindow->NotifyMapLoaded();
+		disasmMapLoadPending = false;
 	}
 
 	void CreateGeDebuggerWindow() {
@@ -590,6 +595,9 @@ namespace MainWindow
 			memoryWindow = new CMemoryDlg(MainWindow::GetHInstance(), MainWindow::GetHWND(), currentDebugMIPS);
 			DialogManager::AddDlg(memoryWindow);
 		}
+		if (memoryMapLoadPending)
+			memoryWindow->NotifyMapLoaded();
+		memoryMapLoadPending = false;
 	}
 
 	void CreateVFPUWindow() {
@@ -597,6 +605,15 @@ namespace MainWindow
 			vfpudlg = new CVFPUDlg(MainWindow::GetHInstance(), MainWindow::GetHWND(), currentDebugMIPS);
 			DialogManager::AddDlg(vfpudlg);
 		}
+	}
+
+	void NotifyDebuggerMapLoaded() {
+		disasmMapLoadPending = disasmWindow == nullptr;
+		memoryMapLoadPending = memoryWindow == nullptr;
+		if (!disasmMapLoadPending)
+			disasmWindow->NotifyMapLoaded();
+		if (!memoryMapLoadPending)
+			memoryWindow->NotifyMapLoaded();
 	}
 
 	void DestroyDebugWindows() {
@@ -935,6 +952,7 @@ namespace MainWindow
 					const u8 *ptr = (const u8 *)info->addr;
 					std::string name;
 
+					std::lock_guard<std::recursive_mutex> guard(MIPSComp::jitLock);
 					if (MIPSComp::jit && MIPSComp::jit->DescribeCodePtr(ptr, name)) {
 						swprintf_s(info->name, L"Jit::%S", name.c_str());
 						return TRUE;
@@ -986,10 +1004,7 @@ namespace MainWindow
 			break;
 
 		case WM_USER + 1:
-			if (disasmWindow)
-				disasmWindow->NotifyMapLoaded();
-			if (memoryWindow)
-				memoryWindow->NotifyMapLoaded();
+			NotifyDebuggerMapLoaded();
 			if (disasmWindow)
 				disasmWindow->UpdateDialog();
 			break;

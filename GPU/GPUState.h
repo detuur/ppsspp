@@ -17,7 +17,7 @@
 
 #pragma once
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/Swap.h"
 #include "GPU/GPU.h"
 #include "GPU/ge_constants.h"
@@ -298,9 +298,7 @@ struct GPUgstate {
 	bool isTextureAlphaUsed() const { return (texfunc & 0x100) != 0; }
 	GETextureFormat getTextureFormat() const { return static_cast<GETextureFormat>(texformat & 0xF); }
 	bool isTextureFormatIndexed() const { return (texformat & 4) != 0; } // GE_TFMT_CLUT4 - GE_TFMT_CLUT32 are 0b1xx.
-	int getTextureEnvColR() const { return texenvcolor&0xFF; }
-	int getTextureEnvColG() const { return (texenvcolor>>8)&0xFF; }
-	int getTextureEnvColB() const { return (texenvcolor>>16)&0xFF; }
+	int getTextureEnvColRGB() const { return texenvcolor & 0x00FFFFFF; }
 	u32 getClutAddress() const { return (clutaddr & 0x00FFFFF0) | ((clutaddrupper << 8) & 0x0F000000); }
 	int getClutLoadBytes() const { return (loadclut & 0x3F) * 32; }
 	int getClutLoadBlocks() const { return (loadclut & 0x3F); }
@@ -340,7 +338,7 @@ struct GPUgstate {
 	unsigned int getAmbientB() const { return (ambientcolor>>16)&0xFF; }
 	unsigned int getAmbientA() const { return ambientalpha&0xFF; }
 	unsigned int getAmbientRGBA() const { return (ambientcolor&0xFFFFFF) | ((ambientalpha&0xFF)<<24); }
-	unsigned int getMaterialUpdate() const { return materialupdate&0xFFFFFF; }
+	unsigned int getMaterialUpdate() const { return materialupdate & 7; }
 	unsigned int getMaterialAmbientR() const { return materialambient&0xFF; }
 	unsigned int getMaterialAmbientG() const { return (materialambient>>8)&0xFF; }
 	unsigned int getMaterialAmbientB() const { return (materialambient>>16)&0xFF; }
@@ -388,8 +386,8 @@ struct GPUgstate {
 	int getScissorY1() const { return (scissor1 >> 10) & 0x3FF; }
 	int getScissorX2() const { return scissor2 & 0x3FF; }
 	int getScissorY2() const { return (scissor2 >> 10) & 0x3FF; }
-	int getRegionX1() const { return region1 & 0x3FF; }
-	int getRegionY1() const { return (region1 >> 10) & 0x3FF; }
+	int getRegionRateX() const { return 0x100 + (region1 & 0x3FF); }
+	int getRegionRateY() const { return 0x100 + ((region1 >> 10) & 0x3FF); }
 	int getRegionX2() const { return (region2 & 0x3FF); }
 	int getRegionY2() const { return (region2 >> 10) & 0x3FF; }
 

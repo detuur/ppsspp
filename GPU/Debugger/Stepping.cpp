@@ -36,6 +36,7 @@ enum PauseAction {
 	PAUSE_GETTEX,
 	PAUSE_GETCLUT,
 	PAUSE_SETCMDVALUE,
+	PAUSE_FLUSHDRAW,
 };
 
 static bool isStepping;
@@ -119,6 +120,10 @@ static void RunPauseAction() {
 		gpuDebug->SetCmdValue(pauseSetCmdValue);
 		break;
 
+	case PAUSE_FLUSHDRAW:
+		gpuDebug->DispatchFlush();
+		break;
+
 	default:
 		ERROR_LOG(G3D, "Unsupported pause action, forgot to add it to the switch.");
 	}
@@ -154,7 +159,7 @@ bool SingleStep() {
 
 bool EnterStepping() {
 	std::unique_lock<std::mutex> guard(pauseLock);
-	if (coreState != CORE_RUNNING && coreState != CORE_NEXTFRAME) {
+	if (coreState != CORE_RUNNING && coreState != CORE_NEXTFRAME && coreState != CORE_STEPPING) {
 		// Shutting down, don't try to step.
 		actionComplete = true;
 		actionWait.notify_all();
@@ -236,6 +241,15 @@ bool GPU_SetCmdValue(u32 op) {
 
 	pauseSetCmdValue = op;
 	SetPauseAction(PAUSE_SETCMDVALUE);
+	return true;
+}
+
+bool GPU_FlushDrawing() {
+	if (!isStepping && coreState != CORE_STEPPING) {
+		return false;
+	}
+
+	SetPauseAction(PAUSE_FLUSHDRAW);
 	return true;
 }
 

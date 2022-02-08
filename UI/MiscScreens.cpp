@@ -376,13 +376,13 @@ void DrawGameBackground(UIContext &dc, const Path &gamePath, float x, float y, f
 void HandleCommonMessages(const char *message, const char *value, ScreenManager *manager, Screen *activeScreen) {
 	bool isActiveScreen = manager->topScreen() == activeScreen;
 
-	if (!strcmp(message, "clear jit")) {
-		if (MIPSComp::jit && PSP_IsInited()) {
-			MIPSComp::jit->ClearCache();
+	if (!strcmp(message, "clear jit") && PSP_IsInited()) {
+		if (MIPSComp::jit) {
+			std::lock_guard<std::recursive_mutex> guard(MIPSComp::jitLock);
+			if (MIPSComp::jit)
+				MIPSComp::jit->ClearCache();
 		}
-		if (PSP_IsInited()) {
-			currentMIPS->UpdateCore((CPUCore)g_Config.iCpuCore);
-		}
+		currentMIPS->UpdateCore((CPUCore)g_Config.iCpuCore);
 	} else if (!strcmp(message, "control mapping") && isActiveScreen && activeScreen->tag() != "control mapping") {
 		UpdateUIState(UISTATE_MENU);
 		manager->push(new ControlMappingScreen());
@@ -488,16 +488,13 @@ void PromptScreen::CreateViews() {
 
 	Margins actionMenuMargins(0, 100, 15, 0);
 
-	root_ = new LinearLayout(ORIENT_HORIZONTAL);
+	root_ = new AnchorLayout();
 
-	ViewGroup *leftColumn = new AnchorLayout(new LinearLayoutParams(1.0f));
-	root_->Add(leftColumn);
+	root_->Add(new TextView(message_, ALIGN_LEFT | FLAG_WRAP_TEXT, false, new AnchorLayoutParams(WRAP_CONTENT, WRAP_CONTENT, 15, 15, 330, 10)))->SetClip(false);
 
-	float leftColumnWidth = dp_xres - actionMenuMargins.left - actionMenuMargins.right - 300.0f;
-	leftColumn->Add(new TextView(message_, ALIGN_LEFT | FLAG_WRAP_TEXT, false, new AnchorLayoutParams(leftColumnWidth, WRAP_CONTENT, 10, 10, NONE, NONE)))->SetClip(false);
-
-	ViewGroup *rightColumnItems = new LinearLayout(ORIENT_VERTICAL, new LinearLayoutParams(300, FILL_PARENT, actionMenuMargins));
+	ViewGroup *rightColumnItems = new LinearLayout(ORIENT_VERTICAL, new AnchorLayoutParams(300, WRAP_CONTENT, NONE, 15, 15, NONE));
 	root_->Add(rightColumnItems);
+
 	Choice *yesButton = rightColumnItems->Add(new Choice(yesButtonText_));
 	yesButton->OnClick.Handle(this, &PromptScreen::OnYes);
 	root_->SetDefaultFocusView(yesButton);
@@ -528,7 +525,7 @@ void PostProcScreen::CreateViews() {
 	shaders_ = GetAllPostShaderInfo();
 	std::vector<std::string> items;
 	int selected = -1;
-	const std::string selectedName = id_ >= g_Config.vPostShaderNames.size() ? "Off" : g_Config.vPostShaderNames[id_];
+	const std::string selectedName = id_ >= (int)g_Config.vPostShaderNames.size() ? "Off" : g_Config.vPostShaderNames[id_];
 	for (int i = 0; i < (int)shaders_.size(); i++) {
 		if (!shaders_[i].visible)
 			continue;
@@ -544,7 +541,7 @@ void PostProcScreen::OnCompleted(DialogResult result) {
 	if (result != DR_OK)
 		return;
 	const std::string &value = shaders_[listView_->GetSelected()].section;
-	if (id_ < g_Config.vPostShaderNames.size())
+	if (id_ < (int)g_Config.vPostShaderNames.size())
 		g_Config.vPostShaderNames[id_] = value;
 	else
 		g_Config.vPostShaderNames.push_back(value);
@@ -780,7 +777,7 @@ void LogoScreen::render() {
 	int ppsspp_org_y = bounds.h / 2 + 130;
 	dc.DrawText("www.ppsspp.org", bounds.centerX(), ppsspp_org_y, textColor, ALIGN_CENTER);
 
-#if (defined(_WIN32) && !PPSSPP_PLATFORM(UWP)) || PPSSPP_PLATFORM(ANDROID) || PPSSPP_PLATFORM(LINUX)
+#if !PPSSPP_PLATFORM(UWP)
 	// Draw the graphics API, except on UWP where it's always D3D11
 	std::string apiName = screenManager()->getDrawContext()->GetInfoString(InfoField::APINAME);
 #ifdef _DEBUG
@@ -973,7 +970,8 @@ void CreditsScreen::render() {
 #endif
 #if defined(USING_QT_UI)
 		"Qt",
-#elif !defined(USING_WIN_UI)
+#endif
+#if defined(SDL)
 		"SDL",
 #endif
 		"CMake",

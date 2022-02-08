@@ -39,6 +39,7 @@
 #include "Core/SaveState.h"
 #include "Core/System.h"
 #include "Core/Debugger/Breakpoints.h"
+#include "Core/HW/Display.h"
 #include "Core/MIPS/MIPS.h"
 #include "GPU/Debugger/Stepping.h"
 
@@ -187,8 +188,8 @@ bool UpdateScreenScale(int width, int height) {
 	pixel_in_dps_x = 1.0f / g_dpi_scale_x;
 	pixel_in_dps_y = 1.0f / g_dpi_scale_y;
 
-	int new_dp_xres = width * g_dpi_scale_x;
-	int new_dp_yres = height * g_dpi_scale_y;
+	int new_dp_xres = (int)(width * g_dpi_scale_x);
+	int new_dp_yres = (int)(height * g_dpi_scale_y);
 
 	bool dp_changed = new_dp_xres != dp_xres || new_dp_yres != dp_yres;
 	bool px_changed = pixel_xres != width || pixel_yres != height;
@@ -279,8 +280,11 @@ void Core_SingleStep() {
 static inline bool Core_WaitStepping() {
 	std::unique_lock<std::mutex> guard(m_hStepMutex);
 	// We only wait 16ms so that we can still draw UI or react to events.
+	double sleepStart = time_now_d();
 	if (!singleStepPending && coreState == CORE_STEPPING)
 		m_StepCond.wait_for(guard, std::chrono::milliseconds(16));
+	double sleepEnd = time_now_d();
+	DisplayNotifySleep(sleepEnd - sleepStart);
 
 	bool result = singleStepPending;
 	singleStepPending = false;
@@ -447,7 +451,6 @@ void Core_MemoryException(u32 address, u32 pc, MemoryExceptionType type) {
 		e.address = address;
 		e.pc = pc;
 		Core_EnableStepping(true, "memory.exception", address);
-		host->SetDebugMode(true);
 	}
 }
 
@@ -469,7 +472,6 @@ void Core_MemoryExceptionInfo(u32 address, u32 pc, MemoryExceptionType type, std
 		e.address = address;
 		e.pc = pc;
 		Core_EnableStepping(true, "memory.exception", address);
-		host->SetDebugMode(true);
 	}
 }
 
@@ -485,7 +487,6 @@ void Core_ExecException(u32 address, u32 pc, ExecExceptionType type) {
 	e.address = address;
 	e.pc = pc;
 	Core_EnableStepping(true, "cpu.exception", pc);
-	host->SetDebugMode(true);
 }
 
 void Core_Break() {
@@ -498,7 +499,6 @@ void Core_Break() {
 
 	if (!g_Config.bIgnoreBadMemAccess) {
 		Core_EnableStepping(true, "cpu.breakInstruction", currentMIPS->pc);
-		host->SetDebugMode(true);
 	}
 }
 

@@ -162,6 +162,7 @@ public:
 	std::string sMicDevice;
 
 	bool bSoftwareRendering;
+	bool bSoftwareRenderingJit;
 	bool bHardwareTransform; // only used in the GLES backend
 	bool bSoftwareSkinning;  // may speed up some games
 	bool bVendorBugChecksEnabled;
@@ -233,6 +234,7 @@ public:
 	bool bFragmentTestCache;
 	int iSplineBezierQuality; // 0 = low , 1 = Intermediate , 2 = High
 	bool bHardwareTessellation;
+	bool bShaderCache;  // Hidden ini-only setting, useful for debugging shader compile times.
 
 	std::vector<std::string> vPostShaderNames; // Off for chain end (only Off for no shader)
 	std::map<std::string, float> mPostShaderSetting;
@@ -509,6 +511,7 @@ public:
 	// Volatile development settings
 	bool bShowFrameProfiler;
 	bool bSimpleFrameStats;
+	bool bGpuLogProfiler; // Controls the Vulkan logging profiler (profiles textures uploads etc).
 
 	// Various directories. Autoconfigured, not read from ini.
 	Path currentDirectory;  // The directory selected in the game browsing window.

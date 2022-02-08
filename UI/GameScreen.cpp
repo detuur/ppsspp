@@ -187,6 +187,10 @@ void GameScreen::CreateViews() {
 		case IdentifiedFileType::PSP_ISO_NP:
 		case IdentifiedFileType::PSP_ISO:
 			fileTypeSupportCRC = true;
+			break;
+
+		default:
+			break;
 		}
 	}
 
@@ -291,7 +295,7 @@ void GameScreen::render() {
 	if (tvCRC_ && Reporting::HasCRC(gamePath_)) {
 		auto rp = GetI18NCategory("Reporting");
 		std::string crc = StringFromFormat("%08X", Reporting::RetrieveCRC(gamePath_));
-		tvCRC_->SetText(ReplaceAll(rp->T("FeedbackCRCValue", "Disc CRC: [VALUE]"), "[VALUE]", crc));
+		tvCRC_->SetText(ReplaceAll(rp->T("FeedbackCRCValue", "Disc CRC: %1"), "%1", crc));
 		tvCRC_->SetVisibility(UI::V_VISIBLE);
 	}
 
@@ -348,7 +352,7 @@ UI::EventReturn GameScreen::OnGameSettings(UI::EventParams &e) {
 	std::shared_ptr<GameInfo> info = g_gameInfoCache->GetInfo(NULL, gamePath_, GAMEINFO_WANTBG | GAMEINFO_WANTSIZE);
 	if (info && info->paramSFOLoaded) {
 		std::string discID = info->paramSFO.GetValueString("DISC_ID");
-		if ((discID.empty() || !info->disc_total) && gamePath_.FilePathContains("PSP/GAME/"))
+		if ((discID.empty() || !info->disc_total) && gamePath_.FilePathContainsNoCase("PSP/GAME/"))
 			discID = g_paramSFO.GenerateFakeID(gamePath_.ToString());
 		screenManager()->push(new GameSettingsScreen(gamePath_, discID, true));
 	}

@@ -25,6 +25,7 @@
 #include "Common/UI/View.h"
 #include "Common/Profiler/Profiler.h"
 #include "StringUtils.h"
+#include "Core/HW/Display.h"
 
 //#ifdef USE_PROFILER
 static const uint32_t nice_colors[] = {
