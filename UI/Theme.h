@@ -1,3 +1,5 @@
+#pragma once
+
 // Copyright (c) 2013- PPSSPP Project.
 
 // This program is free software: you can redistribute it and/or modify
@@ -15,20 +17,13 @@
 // Official git repository and contact information can be found at
 // https://github.com/hrydgard/ppsspp and http://www.ppsspp.org/.
 
-#pragma once
+#include <string>
+#include <vector>
 
-#include "TransformUnit.h"
+#include "Common/UI/Context.h"
 
-struct PixelFuncID;
-struct SamplerID;
+void ReloadAllThemeInfo();
 
-class BinManager;
-
-namespace Clipper {
-
-void ProcessPoint(const VertexData &v0, BinManager &binner);
-void ProcessLine(const VertexData &v0, const VertexData &v1, BinManager &binner);
-void ProcessTriangle(const VertexData &v0, const VertexData &v1, const VertexData &v2, const VertexData &provoking, BinManager &binner);
-void ProcessRect(const VertexData &v0, const VertexData &v1, BinManager &binner);
-
-}
+std::vector<std::string> GetThemeInfoNames();
+void UpdateTheme();
+UI::Theme *GetTheme();

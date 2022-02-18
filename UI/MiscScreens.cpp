@@ -274,7 +274,7 @@ private:
 	double nextT_ = -INTERVAL;
 };
 
-// TODO: Add more styles. Remember to add to the enum in Config.cpp and the selector in GameSettings too.
+// TODO: Add more styles. Remember to add to the enum in ConfigValues.h and the selector in GameSettings too.
 
 static BackgroundAnimation g_CurBackgroundAnimation = BackgroundAnimation::OFF;
 static std::unique_ptr<Animation> g_Animation;
@@ -766,8 +766,8 @@ void LogoScreen::render() {
 	char temp[256];
 	// Manually formatting UTF-8 is fun.  \xXX doesn't work everywhere.
 	snprintf(temp, sizeof(temp), "%s Henrik Rydg%c%crd", cr->T("created", "Created by"), 0xC3, 0xA5);
-	dc.Draw()->DrawImage(ImageID("I_ICON"), bounds.centerX() - 120, bounds.centerY() - 30, 1.2f, textColor, ALIGN_CENTER);
-	dc.Draw()->DrawImage(ImageID("I_LOGO"), bounds.centerX() + 40, bounds.centerY() - 30, 1.5f, textColor, ALIGN_CENTER);
+	dc.Draw()->DrawImage(ImageID("I_ICON"), bounds.centerX() - 120, bounds.centerY() - 30, 1.2f, 0xFFFFFFFF, ALIGN_CENTER);
+	dc.Draw()->DrawImage(ImageID("I_LOGO"), bounds.centerX() + 40, bounds.centerY() - 30, 1.5f, 0xFFFFFFFF, ALIGN_CENTER);
 	//dc.Draw()->DrawTextShadow(UBUNTU48, "PPSSPP", bounds.w / 2, bounds.h / 2 - 30, textColor, ALIGN_CENTER);
 	dc.SetFontScale(1.0f, 1.0f);
 	dc.SetFontStyle(dc.theme->uiFont);

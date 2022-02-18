@@ -464,7 +464,7 @@ void StoreScreen::CreateViews() {
 	topBar->Add(new Button(di->T("Back")))->OnClick.Handle<UIScreen>(this, &UIScreen::OnBack);
 	titleText_ = new TextView("PPSSPP Homebrew Store");
 	topBar->Add(titleText_);
-	UI::Drawable solid(g_Config.uItemDownStyleBg);
+	UI::Drawable solid(0xFFE81949);
 	topBar->SetBG(solid);
 
 	LinearLayout *content;

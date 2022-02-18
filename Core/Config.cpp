@@ -1186,34 +1186,7 @@ static ConfigSetting upgradeSettings[] = {
 };
 
 static ConfigSetting themeSettings[] = {
-	ConfigSetting("LunaItemStyleFgLuna", &g_Config.uItemStyleFg, 0xFFFFFFFF, true, false),
-	ConfigSetting("ItemStyleBgLuna", &g_Config.uItemStyleBg, 0x55000000, true, false),
-	ConfigSetting("ItemFocusedStyleFgLuna", &g_Config.uItemFocusedStyleFg, 0xFFFFFFFF, true, false),
-	ConfigSetting("ItemFocusedStyleBgLuna", &g_Config.uItemFocusedStyleBg, 0xFFEA486E, true, false), //0xFFEDC24C
-	ConfigSetting("ItemDownStyleFgLuna", &g_Config.uItemDownStyleFg, 0xFFFFFFFF, true, false),
-	ConfigSetting("ItemDownStyleBgLuna", &g_Config.uItemDownStyleBg, 0xFFE81949, true, false), //0xFFBD9939
-	ConfigSetting("ItemDisabledStyleFgLuna", &g_Config.uItemDisabledStyleFg, 0x80EEEEEE, true, false),
-	ConfigSetting("ItemDisabledStyleBgLuna", &g_Config.uItemDisabledStyleBg, 0x55E0D4AF, true, false),
-	ConfigSetting("ItemHighlightedStyleFgLuna", &g_Config.uItemHighlightedStyleFg, 0xFFFFFFFF, true, false),
-	ConfigSetting("ItemHighlightedStyleBgLuna", &g_Config.uItemHighlightedStyleBg, 0xFFE83949, true, false), //0x55BDBB39
-
-	ConfigSetting("ButtonStyleFgLuna", &g_Config.uButtonStyleFg, 0xFFFFFFFF, true, false),
-	ConfigSetting("ButtonStyleBgLuna", &g_Config.uButtonStyleBg, 0x55000000, true, false),
-	ConfigSetting("ButtonFocusedStyleFgLuna", &g_Config.uButtonFocusedStyleFg, 0xFFFFFFFF, true, false),
-	ConfigSetting("ButtonFocusedStyleBgLuna", &g_Config.uButtonFocusedStyleBg, 0xFFEA486E, true, false), //0xFFEDC24C
-	ConfigSetting("ButtonDownStyleFgLuna", &g_Config.uButtonDownStyleFg, 0xFFFFFFFF, true, false),
-	ConfigSetting("ButtonDownStyleBgLuna", &g_Config.uButtonDownStyleBg, 0xFFE81949, true, false), //0xFFBD9939
-	ConfigSetting("ButtonDisabledStyleFgLuna", &g_Config.uButtonDisabledStyleFg, 0x80EEEEEE, true, false),
-	ConfigSetting("ButtonDisabledStyleBgLuna", &g_Config.uButtonDisabledStyleBg, 0x55E0D4AF, true, false),
-	ConfigSetting("ButtonHighlightedStyleFgLuna", &g_Config.uButtonHighlightedStyleFg, 0xFFFFFFFF, true, false),
-	ConfigSetting("ButtonHighlightedStyleBgLuna", &g_Config.uButtonHighlightedStyleBg, 0xFFE83949, true, false), //0x55BDBB39
-
-	ConfigSetting("HeaderStyleFgLuna", &g_Config.uHeaderStyleFg, 0xFFFFFFFF, true, false),
-	ConfigSetting("InfoStyleFgLuna", &g_Config.uInfoStyleFg, 0xFFFFFFFF, true, false),
-	ConfigSetting("InfoStyleBgLuna", &g_Config.uInfoStyleBg, 0x00000000U, true, false),
-	ConfigSetting("PopupTitleStyleFgLuna", &g_Config.uPopupTitleStyleFg, 0xFFF27391, true, false), //0xFFE3BE59
-	ConfigSetting("PopupStyleFgLuna", &g_Config.uPopupStyleFg, 0xFFFFFFFF, true, false),
-	ConfigSetting("PopupStyleBgLuna", &g_Config.uPopupStyleBg, 0xFF303030, true, false),
+	ConfigSetting("ThemeName", &g_Config.sThemeName, "Default", true, false),
 
 	ConfigSetting(false),
 };
