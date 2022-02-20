@@ -20,7 +20,7 @@ image I_SHOULDER_LINE source_assets/image/shoulder_line.png copy
 image I_STICK_LINE source_assets/image/stick_line.png copy
 image I_STICK_BG_LINE source_assets/image/stick_bg_line.png copy
 image I_CHECKEDBOX source_assets/image/checkedbox.png copy
-image I_BG source_assets/image/backgroundluna.png copy
+image I_BG source_assets/image/background2.png copy
 image I_L source_assets/image/L.png copy
 image I_R source_assets/image/R.png copy
 image I_DROP_SHADOW source_assets/image/dropshadow.png copy

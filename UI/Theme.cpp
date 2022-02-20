@@ -50,7 +50,7 @@ struct ThemeInfo {
 	uint32_t uPopupTitleStyleFg = 0xFFF27391;
 	uint32_t uPopupStyleFg = 0xFFFFFFFF;
 	uint32_t uPopupStyleBg = 0xFF303030;
-	uint32_t uBackgroundColor = 0xFF754D24;
+	uint32_t uBackgroundColor = 0xFF88375C;
 
 	bool operator == (const std::string &other) {
 		return name == other;
