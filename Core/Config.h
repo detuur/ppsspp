@@ -193,6 +193,9 @@ public:
 	int iWindowWidth;  // Windows and other windowed environments
 	int iWindowHeight;
 
+	float fUITint;
+	float fUISaturation;
+
 	bool bVertexCache;
 	bool bTextureBackoffCache;
 	bool bTextureSecondaryCache;
