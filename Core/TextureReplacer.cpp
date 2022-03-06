@@ -983,6 +983,8 @@ bool ReplacedTexture::Load(int level, void *out, int rowPitch) {
 		}, 0, info.h, MIN_LINES_PER_THREAD);
 	}
 
+	PrepareData(level);
+
 	return true;
 }
 
